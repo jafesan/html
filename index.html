@@ -32,21 +32,26 @@
             position: relative;
             width: 150px;
             height: 150px;
-            margin: 30px 0;
+            margin: 20px 0;
         }
         #arrow-svg {
             width: 100%;
             height: 100%;
-            transition: transform 0.1s linear; /* Transición muy rápida para respuesta instantánea */
+            transition: transform 0.1s linear;
             fill: #e67e22;
         }
+        #distance { /* NUEVO: Estilo para el texto de la distancia */
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #fff;
+            margin: 0;
+        }
         #status {
-            margin-top: 20px;
+            margin-top: 10px;
             font-style: italic;
             color: #bdc3c7;
-            min-height: 40px;
+            min-height: 20px;
         }
-        /* Botón para solicitar permisos */
         #permission-button {
             background-color: #e67e22;
             color: white;
@@ -66,15 +71,15 @@
 <body>
     <div id="container">
         <h1>La brújula siempre apunta al Genil 🍻</h1>
-        <p>Ve a la busca de un buen colacaíto.</p>
-
+        
         <div id="arrow-container">
             <svg id="arrow-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 2 L20 12 L14 12 L14 22 L10 22 L10 12 L4 12 Z"/>
             </svg>
         </div>
 
-        <p id="status">Toca el botón para activar la brújula.</p>
+        <p id="distance">-- km</p>
+        <p id="status">Toca el botón para alcanzar la felicidad.</p>
         
         <button id="permission-button">Activar Brújula</button>
     </div>
@@ -84,6 +89,7 @@
             const arrow = document.getElementById('arrow-svg');
             const status = document.getElementById('status');
             const permissionButton = document.getElementById('permission-button');
+            const distanceEl = document.getElementById('distance'); // NUEVO
             
             const target = {
                 latitude: 37.9956906,
@@ -92,13 +98,10 @@
 
             let targetBearing = 0;
 
-            // 1. Iniciar todo al hacer clic en el botón
             permissionButton.addEventListener('click', () => {
-                // Ocultar el botón después de pulsarlo
                 permissionButton.style.display = 'none';
                 status.textContent = 'Inicializando sensores...';
 
-                // Solicitar permisos para sensores de orientación (necesario en iOS 13+)
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                     DeviceOrientationEvent.requestPermission()
                         .then(permissionState => {
@@ -111,13 +114,11 @@
                         })
                         .catch(console.error);
                 } else {
-                    // Para Android y otros dispositivos que no requieren este paso
                     window.addEventListener('deviceorientation', handleOrientation);
                     startGeolocation();
                 }
             });
 
-            // 2. Obtener la ubicación GPS
             function startGeolocation() {
                 if (!navigator.geolocation) {
                     status.textContent = 'Geolocalización no soportada.';
@@ -128,9 +129,14 @@
                         latitude: position.coords.latitude,
                         longitude: position.coords.longitude
                     };
-                    // Calcular la dirección hacia el objetivo (solo se hace cuando la ubicación cambia)
+                    
                     targetBearing = calculateBearing(user, target);
-                    status.textContent = 'El Genil es un lugar seguro, no existen los judíos.';
+                    
+                    // NUEVO: Calcular y mostrar distancia
+                    const distanceInKm = calculateDistance(user, target);
+                    updateDistanceText(distanceInKm);
+
+                    status.textContent = '¡Brújula activada! Sigue la flecha.';
 
                 }, (error) => {
                     status.textContent = 'No se pudo obtener la ubicación.';
@@ -138,21 +144,22 @@
                 }, { enableHighAccuracy: true });
             }
 
-            // 3. Manejar la orientación del dispositivo en tiempo real
             function handleOrientation(event) {
-                // event.alpha es la dirección a la que apunta el dispositivo (0-360, 0=Norte)
-                // Para iOS, se necesita usar webkitCompassHeading
                 const compassHeading = event.webkitCompassHeading || event.alpha;
                 
-                if (compassHeading === null) {
-                    status.textContent = 'Tu dispositivo no provee datos de brújula.';
-                    return;
-                }
+                if (compassHeading === null) return;
 
-                // La rotación final es la dirección al objetivo MENOS la dirección a la que apunta el móvil
                 const finalRotation = targetBearing - compassHeading;
-                
                 arrow.style.transform = `rotate(${finalRotation}deg)`;
+            }
+            
+            // NUEVO: Función para actualizar el texto de la distancia
+            function updateDistanceText(km) {
+                if (km < 1) {
+                    distanceEl.textContent = `${Math.round(km * 1000)} metros`;
+                } else {
+                    distanceEl.textContent = `${km.toFixed(2)} km`;
+                }
             }
 
             // --- Funciones de cálculo ---
@@ -171,6 +178,24 @@
                 
                 let brng = toDegrees(Math.atan2(y, x));
                 return (brng + 360) % 360;
+            }
+            
+            // NUEVO: Función para calcular distancia (Fórmula de Haversine)
+            function calculateDistance(start, end) {
+                const R = 6371; // Radio de la Tierra en km
+                const toRadians = (deg) => deg * Math.PI / 180;
+
+                const dLat = toRadians(end.latitude - start.latitude);
+                const dLon = toRadians(end.longitude - start.longitude);
+                
+                const lat1 = toRadians(start.latitude);
+                const lat2 = toRadians(end.latitude);
+
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                          Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2); 
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+                
+                return R * c; // Distancia en km
             }
         });
     </script>
