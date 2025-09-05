@@ -2,14 +2,14 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guía Cervecera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Guía Cervecera con Brújula</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             text-align: center;
-            background-color: #f0f0f0;
-            color: #333;
+            background-color: #2c3e50; /* Fondo oscuro */
+            color: #ecf0f1; /* Texto claro */
             margin: 0;
             padding: 20px;
             display: flex;
@@ -17,100 +17,162 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
+            overflow: hidden;
         }
         #container {
-            background-color: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         h1 {
-            color: #d35400; /* Un tono naranja más profundo */
+            color: #e67e22;
+        }
+        #arrow-container {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            margin: 30px 0;
         }
         #arrow-svg {
-            width: 120px; /* Un poco más grande para mejor visibilidad */
-            height: 120px;
-            transition: transform 0.7s cubic-bezier(0.25, 1, 0.5, 1); /* Transición más suave */
-            margin: 25px 0;
-            fill: #d35400; /* El color de la flecha */
+            width: 100%;
+            height: 100%;
+            transition: transform 0.1s linear; /* Transición muy rápida para respuesta instantánea */
+            fill: #e67e22;
         }
         #status {
             margin-top: 20px;
             font-style: italic;
-            color: #666;
-            min-height: 20px; /* Evita que la página salte cuando cambia el texto */
+            color: #bdc3c7;
+            min-height: 40px;
+        }
+        /* Botón para solicitar permisos */
+        #permission-button {
+            background-color: #e67e22;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        #permission-button:active {
+            transform: scale(0.95);
         }
     </style>
 </head>
 <body>
     <div id="container">
-        <h1>Where is the Genil? 🍻</h1>
-        <p>El camino hacia un buen colacaíto.</p>
+        <h1>La brújula siempre apunta al Genil 🍻</h1>
+        <p>Ve a la busca de un buen colacaíto.</p>
 
-        <svg id="arrow-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2 L20 12 L14 12 L14 22 L10 22 L10 12 L4 12 Z"/>
-        </svg>
+        <div id="arrow-container">
+            <svg id="arrow-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2 L20 12 L14 12 L14 22 L10 22 L10 12 L4 12 Z"/>
+            </svg>
+        </div>
 
-        <p id="status">Obteniendo tu ubicación...</p>
+        <p id="status">Toca el botón para activar la brújula.</p>
+        
+        <button id="permission-button">Activar Brújula</button>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const arrow = document.getElementById('arrow-svg');
             const status = document.getElementById('status');
+            const permissionButton = document.getElementById('permission-button');
+            
             const target = {
                 latitude: 37.9956906,
                 longitude: -1.1224687
             };
 
-            if (!navigator.geolocation) {
-                status.textContent = 'La geolocalización no es compatible con tu navegador.';
-                return;
+            let targetBearing = 0;
+
+            // 1. Iniciar todo al hacer clic en el botón
+            permissionButton.addEventListener('click', () => {
+                // Ocultar el botón después de pulsarlo
+                permissionButton.style.display = 'none';
+                status.textContent = 'Inicializando sensores...';
+
+                // Solicitar permisos para sensores de orientación (necesario en iOS 13+)
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(permissionState => {
+                            if (permissionState === 'granted') {
+                                window.addEventListener('deviceorientation', handleOrientation);
+                                startGeolocation();
+                            } else {
+                                status.textContent = 'Permiso denegado para usar la brújula.';
+                            }
+                        })
+                        .catch(console.error);
+                } else {
+                    // Para Android y otros dispositivos que no requieren este paso
+                    window.addEventListener('deviceorientation', handleOrientation);
+                    startGeolocation();
+                }
+            });
+
+            // 2. Obtener la ubicación GPS
+            function startGeolocation() {
+                if (!navigator.geolocation) {
+                    status.textContent = 'Geolocalización no soportada.';
+                    return;
+                }
+                navigator.geolocation.watchPosition((position) => {
+                    const user = {
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude
+                    };
+                    // Calcular la dirección hacia el objetivo (solo se hace cuando la ubicación cambia)
+                    targetBearing = calculateBearing(user, target);
+                    status.textContent = '¡Brújula activada! Sigue la flecha.';
+
+                }, (error) => {
+                    status.textContent = 'No se pudo obtener la ubicación.';
+                    console.error(error);
+                }, { enableHighAccuracy: true });
             }
 
-            const options = {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            };
-
-            const success = (position) => {
-                const user = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
-                };
+            // 3. Manejar la orientación del dispositivo en tiempo real
+            function handleOrientation(event) {
+                // event.alpha es la dirección a la que apunta el dispositivo (0-360, 0=Norte)
+                // Para iOS, se necesita usar webkitCompassHeading
+                const compassHeading = event.webkitCompassHeading || event.alpha;
                 
-                status.textContent = `¡La flecha apunta al colacaíto!`;
+                if (compassHeading === null) {
+                    status.textContent = 'Tu dispositivo no provee datos de brújula.';
+                    return;
+                }
 
-                const bearing = calculateBearing(user, target);
-                arrow.style.transform = `rotate(${bearing}deg)`;
-            };
+                // La rotación final es la dirección al objetivo MENOS la dirección a la que apunta el móvil
+                const finalRotation = targetBearing - compassHeading;
+                
+                arrow.style.transform = `rotate(${finalRotation}deg)`;
+            }
 
-            const error = (err) => {
-                console.warn(`ERROR(${err.code}): ${err.message}`);
-                status.textContent = 'No se pudo obtener tu ubicación.';
-            };
+            // --- Funciones de cálculo ---
+            function calculateBearing(start, end) {
+                const toRadians = (deg) => deg * Math.PI / 180;
+                const toDegrees = (rad) => rad * 180 / Math.PI;
 
-            navigator.geolocation.watchPosition(success, error, options);
+                const startLat = toRadians(start.latitude);
+                const startLng = toRadians(start.longitude);
+                const destLat = toRadians(end.latitude);
+                const destLng = toRadians(end.longitude);
+
+                const y = Math.sin(destLng - startLng) * Math.cos(destLat);
+                const x = Math.cos(startLat) * Math.sin(destLat) -
+                          Math.sin(startLat) * Math.cos(destLat) * Math.cos(destLng - startLng);
+                
+                let brng = toDegrees(Math.atan2(y, x));
+                return (brng + 360) % 360;
+            }
         });
-
-        function calculateBearing(start, end) {
-            const toRadians = (deg) => deg * Math.PI / 180;
-            const toDegrees = (rad) => rad * 180 / Math.PI;
-
-            const startLat = toRadians(start.latitude);
-            const startLng = toRadians(start.longitude);
-            const destLat = toRadians(end.latitude);
-            const destLng = toRadians(end.longitude);
-
-            const y = Math.sin(destLng - startLng) * Math.cos(destLat);
-            const x = Math.cos(startLat) * Math.sin(destLat) -
-                      Math.sin(startLat) * Math.cos(destLat) * Math.cos(destLng - startLng);
-            
-            let brng = Math.atan2(y, x);
-            brng = toDegrees(brng);
-            return (brng + 360) % 360;
-        }
     </script>
 </body>
 </html>
